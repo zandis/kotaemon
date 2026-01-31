@@ -11,6 +11,7 @@ This module provides:
 
 import hashlib
 import hmac
+import logging
 import os
 import re
 import secrets
@@ -23,6 +24,8 @@ from html import escape as html_escape
 from threading import Lock
 from typing import Any, Callable, Optional, TypeVar
 from urllib.parse import quote as url_quote
+
+logger = logging.getLogger(__name__)
 
 # Try to import bcrypt, fall back to hashlib with proper salting
 try:
@@ -582,10 +585,22 @@ class CSRFProtection:
         Initialize CSRF protection.
 
         Args:
-            secret_key: Secret key for signing tokens
+            secret_key: Secret key for signing tokens (required in production)
             token_lifetime: Token validity in seconds
         """
-        self._secret = secret_key or os.environ.get("CSRF_SECRET", secrets.token_hex(32))
+        env_secret = os.environ.get("CSRF_SECRET")
+        if secret_key:
+            self._secret = secret_key
+        elif env_secret:
+            self._secret = env_secret
+        else:
+            # Generate ephemeral secret - tokens will not survive restart
+            self._secret = secrets.token_hex(32)
+            logger.warning(
+                "CSRF_SECRET not configured. Using ephemeral secret - "
+                "all CSRF tokens will be invalidated on application restart. "
+                "Set CSRF_SECRET environment variable for production use."
+            )
         self._lifetime = token_lifetime
         self._tokens: dict[str, tuple[str, float]] = {}
         self._lock = Lock()
@@ -683,7 +698,19 @@ class SessionTokenManager:
         token_lifetime: int = 86400,  # 24 hours
         refresh_threshold: int = 3600  # Refresh if < 1 hour left
     ):
-        self._secret = secret_key or os.environ.get("SESSION_SECRET", secrets.token_hex(32))
+        env_secret = os.environ.get("SESSION_SECRET")
+        if secret_key:
+            self._secret = secret_key
+        elif env_secret:
+            self._secret = env_secret
+        else:
+            # Generate ephemeral secret - sessions will not survive restart
+            self._secret = secrets.token_hex(32)
+            logger.warning(
+                "SESSION_SECRET not configured. Using ephemeral secret - "
+                "all sessions will be invalidated on application restart. "
+                "Set SESSION_SECRET environment variable for production use."
+            )
         self._lifetime = token_lifetime
         self._refresh_threshold = refresh_threshold
         self._sessions: dict[str, dict] = {}
@@ -762,11 +789,18 @@ class SessionTokenManager:
             old_token: Current session token
 
         Returns:
-            New token or None if session invalid
+            New token or None if session invalid or expired
         """
         with self._lock:
             session = self._sessions.get(old_token)
             if not session:
+                return None
+
+            now = time.time()
+
+            # Check if session is expired - don't refresh expired sessions
+            if now > session['expires_at']:
+                del self._sessions[old_token]
                 return None
 
             # Remove old session
@@ -774,7 +808,6 @@ class SessionTokenManager:
 
             # Create new token with same session data
             new_token = secrets.token_urlsafe(self.TOKEN_LENGTH)
-            now = time.time()
 
             session['expires_at'] = now + self._lifetime
             session['last_activity'] = now

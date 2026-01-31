@@ -498,7 +498,12 @@ class MetricsCollector:
         all_metrics = metrics.get_metrics()
     """
 
-    def __init__(self):
+    # Maximum number of unique metrics to prevent unbounded memory growth
+    MAX_METRICS = 10000
+    MAX_HISTOGRAM_VALUES = 1000
+
+    def __init__(self, max_metrics: int = MAX_METRICS):
+        self._max_metrics = max_metrics
         self._metrics: Dict[str, Metric] = {}
         self._counters: Dict[str, float] = {}
         self._histograms: Dict[str, List[float]] = {}
@@ -508,6 +513,9 @@ class MetricsCollector:
         """Record a gauge metric (current value)."""
         key = self._make_key(name, labels)
         with self._lock:
+            # Check memory bounds - don't add new metrics if at limit
+            if key not in self._metrics and len(self._metrics) >= self._max_metrics:
+                return  # Silently drop to prevent memory exhaustion
             self._metrics[key] = Metric(
                 name=name,
                 value=value,
@@ -524,9 +532,13 @@ class MetricsCollector:
         """Increment a counter metric."""
         key = self._make_key(name, labels)
         with self._lock:
+            # Check memory bounds for new counters
             if key not in self._counters:
+                if len(self._counters) >= self._max_metrics:
+                    return  # Silently drop to prevent memory exhaustion
                 self._counters[key] = 0
             self._counters[key] += increment
+            # Metrics dict bounded by counters check above
             self._metrics[key] = Metric(
                 name=name,
                 value=self._counters[key],
@@ -543,13 +555,16 @@ class MetricsCollector:
         """Record a histogram metric value."""
         key = self._make_key(name, labels)
         with self._lock:
+            # Check memory bounds for new histograms
             if key not in self._histograms:
+                if len(self._histograms) >= self._max_metrics:
+                    return  # Silently drop to prevent memory exhaustion
                 self._histograms[key] = []
             self._histograms[key].append(value)
 
-            # Keep last 1000 values
-            if len(self._histograms[key]) > 1000:
-                self._histograms[key] = self._histograms[key][-1000:]
+            # Keep last MAX_HISTOGRAM_VALUES values
+            if len(self._histograms[key]) > self.MAX_HISTOGRAM_VALUES:
+                self._histograms[key] = self._histograms[key][-self.MAX_HISTOGRAM_VALUES:]
 
             values = self._histograms[key]
             self._metrics[key] = Metric(

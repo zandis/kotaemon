@@ -9,6 +9,7 @@ This module provides:
 """
 
 import os
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, TypeVar, Union
@@ -36,12 +37,34 @@ class DatabaseConfig:
     @classmethod
     def from_env(cls) -> 'DatabaseConfig':
         """Load from environment variables."""
+        defaults = cls()
+        try:
+            pool_size = int(os.getenv("DATABASE_POOL_SIZE", defaults.pool_size))
+        except (ValueError, TypeError):
+            logger.warning("Invalid DATABASE_POOL_SIZE, using default")
+            pool_size = defaults.pool_size
+        try:
+            max_overflow = int(os.getenv("DATABASE_MAX_OVERFLOW", defaults.max_overflow))
+        except (ValueError, TypeError):
+            logger.warning("Invalid DATABASE_MAX_OVERFLOW, using default")
+            max_overflow = defaults.max_overflow
+        try:
+            pool_timeout = int(os.getenv("DATABASE_POOL_TIMEOUT", defaults.pool_timeout))
+        except (ValueError, TypeError):
+            logger.warning("Invalid DATABASE_POOL_TIMEOUT, using default")
+            pool_timeout = defaults.pool_timeout
+        try:
+            pool_recycle = int(os.getenv("DATABASE_POOL_RECYCLE", defaults.pool_recycle))
+        except (ValueError, TypeError):
+            logger.warning("Invalid DATABASE_POOL_RECYCLE, using default")
+            pool_recycle = defaults.pool_recycle
+
         return cls(
-            url=os.getenv("DATABASE_URL", cls.url),
-            pool_size=int(os.getenv("DATABASE_POOL_SIZE", cls.pool_size)),
-            max_overflow=int(os.getenv("DATABASE_MAX_OVERFLOW", cls.max_overflow)),
-            pool_timeout=int(os.getenv("DATABASE_POOL_TIMEOUT", cls.pool_timeout)),
-            pool_recycle=int(os.getenv("DATABASE_POOL_RECYCLE", cls.pool_recycle)),
+            url=os.getenv("DATABASE_URL", defaults.url),
+            pool_size=pool_size,
+            max_overflow=max_overflow,
+            pool_timeout=pool_timeout,
+            pool_recycle=pool_recycle,
             echo=os.getenv("DATABASE_ECHO", "false").lower() == "true"
         )
 
@@ -62,14 +85,31 @@ class SecurityConfig:
     @classmethod
     def from_env(cls) -> 'SecurityConfig':
         """Load from environment variables."""
+        defaults = cls()
+        try:
+            session_lifetime_hours = int(os.getenv("SESSION_LIFETIME_HOURS", defaults.session_lifetime_hours))
+        except (ValueError, TypeError):
+            logger.warning("Invalid SESSION_LIFETIME_HOURS, using default")
+            session_lifetime_hours = defaults.session_lifetime_hours
+        try:
+            rate_limit_requests = int(os.getenv("RATE_LIMIT_REQUESTS", defaults.rate_limit_requests))
+        except (ValueError, TypeError):
+            logger.warning("Invalid RATE_LIMIT_REQUESTS, using default")
+            rate_limit_requests = defaults.rate_limit_requests
+        try:
+            rate_limit_window = int(os.getenv("RATE_LIMIT_WINDOW", defaults.rate_limit_window))
+        except (ValueError, TypeError):
+            logger.warning("Invalid RATE_LIMIT_WINDOW, using default")
+            rate_limit_window = defaults.rate_limit_window
+
         return cls(
             secret_key=os.getenv("SECRET_KEY", ""),
             password_pepper=os.getenv("PASSWORD_PEPPER", ""),
-            session_lifetime_hours=int(os.getenv("SESSION_LIFETIME_HOURS", cls.session_lifetime_hours)),
+            session_lifetime_hours=session_lifetime_hours,
             csrf_enabled=os.getenv("CSRF_ENABLED", "true").lower() == "true",
             rate_limit_enabled=os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true",
-            rate_limit_requests=int(os.getenv("RATE_LIMIT_REQUESTS", cls.rate_limit_requests)),
-            rate_limit_window=int(os.getenv("RATE_LIMIT_WINDOW", cls.rate_limit_window)),
+            rate_limit_requests=rate_limit_requests,
+            rate_limit_window=rate_limit_window,
             allowed_hosts=os.getenv("ALLOWED_HOSTS", "*").split(","),
             cors_origins=os.getenv("CORS_ORIGINS", "").split(",") if os.getenv("CORS_ORIGINS") else []
         )
@@ -101,14 +141,36 @@ class LLMConfig:
     @classmethod
     def from_env(cls, prefix: str = "LLM") -> 'LLMConfig':
         """Load from environment variables with prefix."""
+        defaults = cls()
+        try:
+            temperature = float(os.getenv(f"{prefix}_TEMPERATURE", defaults.temperature))
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid {prefix}_TEMPERATURE, using default")
+            temperature = defaults.temperature
+        try:
+            max_tokens = int(os.getenv(f"{prefix}_MAX_TOKENS", defaults.max_tokens))
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid {prefix}_MAX_TOKENS, using default")
+            max_tokens = defaults.max_tokens
+        try:
+            timeout = int(os.getenv(f"{prefix}_TIMEOUT", defaults.timeout))
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid {prefix}_TIMEOUT, using default")
+            timeout = defaults.timeout
+        try:
+            retry_attempts = int(os.getenv(f"{prefix}_RETRY_ATTEMPTS", defaults.retry_attempts))
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid {prefix}_RETRY_ATTEMPTS, using default")
+            retry_attempts = defaults.retry_attempts
+
         return cls(
-            provider=os.getenv(f"{prefix}_PROVIDER", cls.provider),
+            provider=os.getenv(f"{prefix}_PROVIDER", defaults.provider),
             api_key=os.getenv(f"{prefix}_API_KEY", ""),
-            model=os.getenv(f"{prefix}_MODEL", cls.model),
-            temperature=float(os.getenv(f"{prefix}_TEMPERATURE", cls.temperature)),
-            max_tokens=int(os.getenv(f"{prefix}_MAX_TOKENS", cls.max_tokens)),
-            timeout=int(os.getenv(f"{prefix}_TIMEOUT", cls.timeout)),
-            retry_attempts=int(os.getenv(f"{prefix}_RETRY_ATTEMPTS", cls.retry_attempts)),
+            model=os.getenv(f"{prefix}_MODEL", defaults.model),
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=timeout,
+            retry_attempts=retry_attempts,
             api_base=os.getenv(f"{prefix}_API_BASE")
         )
 
@@ -134,12 +196,19 @@ class StorageConfig:
     @classmethod
     def from_env(cls) -> 'StorageConfig':
         """Load from environment variables."""
+        defaults = cls()
+        try:
+            max_upload_size_mb = int(os.getenv("MAX_UPLOAD_SIZE_MB", defaults.max_upload_size_mb))
+        except (ValueError, TypeError):
+            logger.warning("Invalid MAX_UPLOAD_SIZE_MB, using default")
+            max_upload_size_mb = defaults.max_upload_size_mb
+
         return cls(
-            data_dir=os.getenv("DATA_DIR", cls.data_dir),
-            upload_dir=os.getenv("UPLOAD_DIR", cls.upload_dir),
-            cache_dir=os.getenv("CACHE_DIR", cls.cache_dir),
-            max_upload_size_mb=int(os.getenv("MAX_UPLOAD_SIZE_MB", cls.max_upload_size_mb)),
-            allowed_extensions=os.getenv("ALLOWED_EXTENSIONS", ",".join(cls.allowed_extensions)).split(",")
+            data_dir=os.getenv("DATA_DIR", defaults.data_dir),
+            upload_dir=os.getenv("UPLOAD_DIR", defaults.upload_dir),
+            cache_dir=os.getenv("CACHE_DIR", defaults.cache_dir),
+            max_upload_size_mb=max_upload_size_mb,
+            allowed_extensions=os.getenv("ALLOWED_EXTENSIONS", ",".join(defaults.allowed_extensions)).split(",")
         )
 
     def ensure_directories(self) -> None:
@@ -195,14 +264,26 @@ class AppConfig:
     @classmethod
     def from_env(cls) -> 'AppConfig':
         """Load full configuration from environment."""
+        defaults = cls()
+        try:
+            port = int(os.getenv("PORT", defaults.port))
+        except (ValueError, TypeError):
+            logger.warning("Invalid PORT, using default")
+            port = defaults.port
+        try:
+            workers = int(os.getenv("WORKERS", defaults.workers))
+        except (ValueError, TypeError):
+            logger.warning("Invalid WORKERS, using default")
+            workers = defaults.workers
+
         return cls(
-            name=os.getenv("APP_NAME", cls.name),
-            version=os.getenv("APP_VERSION", cls.version),
-            environment=os.getenv("ENVIRONMENT", cls.environment),
-            host=os.getenv("HOST", cls.host),
-            port=int(os.getenv("PORT", cls.port)),
-            workers=int(os.getenv("WORKERS", cls.workers)),
-            log_level=os.getenv("LOG_LEVEL", cls.log_level),
+            name=os.getenv("APP_NAME", defaults.name),
+            version=os.getenv("APP_VERSION", defaults.version),
+            environment=os.getenv("ENVIRONMENT", defaults.environment),
+            host=os.getenv("HOST", defaults.host),
+            port=port,
+            workers=workers,
+            log_level=os.getenv("LOG_LEVEL", defaults.log_level),
             database=DatabaseConfig.from_env(),
             security=SecurityConfig.from_env(),
             llm=LLMConfig.from_env(),
@@ -271,6 +352,7 @@ class ConfigManager:
     """
 
     _instance: Optional[AppConfig] = None
+    _lock: threading.Lock = threading.Lock()
 
     @classmethod
     def load(cls, validate: bool = True) -> AppConfig:
@@ -283,32 +365,39 @@ class ConfigManager:
         Returns:
             AppConfig instance
         """
-        config = AppConfig.from_env()
+        with cls._lock:
+            config = AppConfig.from_env()
 
-        if validate:
-            errors = config.validate(strict=config.is_production)
-            if errors and config.is_production:
-                raise ConfigurationError(
-                    f"Configuration validation failed: {'; '.join(errors)}"
-                )
-            elif errors:
-                for error in errors:
-                    logger.warning(f"Configuration warning: {error}")
+            if validate:
+                errors = config.validate(strict=config.is_production)
+                if errors and config.is_production:
+                    raise ConfigurationError(
+                        f"Configuration validation failed: {'; '.join(errors)}"
+                    )
+                elif errors:
+                    for error in errors:
+                        logger.warning(f"Configuration warning: {error}")
 
-        cls._instance = config
-        return config
+            cls._instance = config
+            return config
 
     @classmethod
     def get(cls) -> AppConfig:
         """Get current configuration (load if not loaded)."""
-        if cls._instance is None:
-            cls._instance = cls.load(validate=False)
-        return cls._instance
+        with cls._lock:
+            if cls._instance is None:
+                # Release lock for load() which will reacquire
+                pass
+            else:
+                return cls._instance
+        # Load outside lock to avoid nested lock
+        return cls.load(validate=False)
 
     @classmethod
     def reload(cls) -> AppConfig:
         """Reload configuration from environment."""
-        cls._instance = None
+        with cls._lock:
+            cls._instance = None
         return cls.load()
 
 
@@ -389,6 +478,7 @@ class SecretsManager:
         self.secrets_dir = Path(secrets_dir) if secrets_dir else Path("/run/secrets")
         self.env_prefix = env_prefix
         self._cache: Dict[str, str] = {}
+        self._lock = threading.Lock()
 
     def get(self, key: str, default: Optional[str] = None) -> Optional[str]:
         """
@@ -407,25 +497,26 @@ class SecretsManager:
         Returns:
             Secret value or default
         """
-        # Check cache
-        if key in self._cache:
-            return self._cache[key]
+        with self._lock:
+            # Check cache
+            if key in self._cache:
+                return self._cache[key]
 
-        # Check environment
-        env_key = f"{self.env_prefix}{key}" if self.env_prefix else key
-        value = os.getenv(env_key)
-        if value:
-            self._cache[key] = value
-            return value
+            # Check environment
+            env_key = f"{self.env_prefix}{key}" if self.env_prefix else key
+            value = os.getenv(env_key)
+            if value:
+                self._cache[key] = value
+                return value
 
-        # Check file-based secrets
-        secret_file = self.secrets_dir / key
-        if secret_file.exists():
-            value = secret_file.read_text().strip()
-            self._cache[key] = value
-            return value
+            # Check file-based secrets
+            secret_file = self.secrets_dir / key
+            if secret_file.exists():
+                value = secret_file.read_text().strip()
+                self._cache[key] = value
+                return value
 
-        return default
+            return default
 
     def require(self, key: str) -> str:
         """Get a required secret (raises if not found)."""
@@ -436,7 +527,8 @@ class SecretsManager:
 
     def clear_cache(self) -> None:
         """Clear the secrets cache."""
-        self._cache.clear()
+        with self._lock:
+            self._cache.clear()
 
 
 # Global instances

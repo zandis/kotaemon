@@ -73,11 +73,11 @@ class PromptInjectionDetector:
         (r"<\s*system\s*>", InjectionRiskLevel.CRITICAL),
         (r"act\s+as\s+(a\s+)?system", InjectionRiskLevel.HIGH),
 
-        # Role-playing attacks
-        (r"you\s+are\s+(now\s+)?(a|an|the)\s+\w+", InjectionRiskLevel.MEDIUM),
-        (r"pretend\s+(to\s+be|you\s+are)", InjectionRiskLevel.MEDIUM),
-        (r"roleplay\s+as", InjectionRiskLevel.MEDIUM),
-        (r"from\s+now\s+on\s+(you|your)", InjectionRiskLevel.HIGH),
+        # Role-playing attacks - more specific patterns to reduce false positives
+        (r"you\s+are\s+now\s+(a|an)\s+(different|new|evil|malicious|hacker|jailbroken)", InjectionRiskLevel.HIGH),
+        (r"pretend\s+(to\s+be|you\s+are)\s+(a|an)\s+(different|new|evil|malicious)", InjectionRiskLevel.MEDIUM),
+        (r"roleplay\s+as\s+(a|an)?\s*(different|evil|malicious|hacker)", InjectionRiskLevel.MEDIUM),
+        (r"from\s+now\s+on,?\s+(you\s+are|you\s+will|ignore|forget)", InjectionRiskLevel.HIGH),
 
         # Delimiter escapes
         (r"```\s*(system|assistant|user)", InjectionRiskLevel.HIGH),
@@ -95,10 +95,11 @@ class PromptInjectionDetector:
         (r"jailbreak", InjectionRiskLevel.CRITICAL),
         (r"bypass\s+(filters?|restrictions?|rules?)", InjectionRiskLevel.CRITICAL),
 
-        # Output manipulation
-        (r"respond\s+(only\s+)?with", InjectionRiskLevel.LOW),
-        (r"output\s+(only|just)", InjectionRiskLevel.LOW),
-        (r"print\s*\(", InjectionRiskLevel.LOW),
+        # Output manipulation - only flag when combined with suspicious context
+        (r"respond\s+only\s+with\s*(yes|no|true|false|0|1)\b", InjectionRiskLevel.LOW),
+        (r"output\s+(only|just)\s+the\s+(answer|result|code)", InjectionRiskLevel.LOW),
+        # print() is suspicious when in a document - could be code injection attempt
+        (r"print\s*\(\s*['\"]", InjectionRiskLevel.LOW),
 
         # Encoding tricks
         (r"base64\s*:", InjectionRiskLevel.MEDIUM),
@@ -187,10 +188,10 @@ class PromptInjectionDetector:
         # Remove markdown code block language hints that might be system/user
         result = re.sub(r'```\s*(system|assistant|user|INST|SYS)\s*\n', '```\n', result, flags=re.IGNORECASE)
 
-        # Escape special delimiters
-        result = result.replace('[INST]', '[_INST_]')
-        result = result.replace('[/INST]', '[/_INST_]')
-        result = result.replace('[SYS]', '[_SYS_]')
+        # Escape special delimiters (case-insensitive to match detector patterns)
+        result = re.sub(r'\[INST\]', '[_INST_]', result, flags=re.IGNORECASE)
+        result = re.sub(r'\[/INST\]', '[/_INST_]', result, flags=re.IGNORECASE)
+        result = re.sub(r'\[SYS\]', '[_SYS_]', result, flags=re.IGNORECASE)
 
         # Neutralize hidden instruction attempts
         result = re.sub(r'<!--.*?-->', '', result, flags=re.DOTALL)

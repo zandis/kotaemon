@@ -1002,4 +1002,131 @@ libs/ktem/ktem/db/models.py
 
 ---
 
+## Appendix D: New Production-Grade Utilities Added
+
+As part of this review, **8 new utility modules** were created with **20+ production-grade features** to address the identified issues.
+
+### New Modules Created
+
+| Module | Location | Features |
+|--------|----------|----------|
+| `security.py` | `libs/ktem/ktem/utils/` | Password hashing (bcrypt), rate limiting, input sanitization, CSRF protection, session tokens |
+| `validation.py` | `libs/ktem/ktem/utils/` | File validation, path traversal prevention, config validation, URL validation, schema validation |
+| `audit.py` | `libs/ktem/ktem/utils/` | Structured audit logging, event tracking, log rotation, compliance exports |
+| `file_utils.py` | `libs/ktem/ktem/utils/` | Safe ZIP/TAR extraction, temp file management, file hashing, secure file ops |
+| `http_client.py` | `libs/ktem/ktem/utils/` | HTTP client with pooling, retries, circuit breaker, outbound rate limiting |
+| `health.py` | `libs/ktem/ktem/utils/` | Health checks, liveness/readiness probes, metrics collection, system monitoring |
+| `llm_safety.py` | `libs/ktem/ktem/utils/` | Prompt injection detection, RAG sanitization, safe prompt formatting, output validation |
+| `config.py` | `libs/ktem/ktem/utils/` | Environment config, secrets management, feature flags, production validation |
+
+### Feature Summary (20 Features)
+
+#### Security (5 features)
+1. **Secure Password Hashing** - Bcrypt with salt, PBKDF2 fallback
+2. **Rate Limiting** - Sliding window with configurable limits
+3. **Input Sanitization** - HTML, filename, SQL, path sanitization
+4. **CSRF Protection** - Token generation and validation
+5. **Session Token Management** - Secure session handling with expiration
+
+#### Validation (4 features)
+6. **File Validation** - Type, size, magic bytes verification
+7. **Path Validation** - Traversal prevention, safe path resolution
+8. **Config Validation** - Required fields, patterns, constraints
+9. **URL Validation** - SSRF prevention, scheme/host validation
+
+#### Operations (4 features)
+10. **Safe Archive Extraction** - Zip Slip prevention for ZIP/TAR
+11. **Temp File Management** - Auto-cleanup, secure operations
+12. **HTTP Client** - Connection pooling, timeouts, retry logic
+13. **Circuit Breaker** - Prevent cascading failures
+
+#### Monitoring (3 features)
+14. **Health Checks** - Component and system health monitoring
+15. **Audit Logging** - Security event tracking and compliance
+16. **Metrics Collection** - Gauges, counters, histograms
+
+#### LLM Safety (4 features)
+17. **Prompt Injection Detection** - Pattern-based attack detection
+18. **RAG Content Sanitization** - Prevent document-based attacks
+19. **Safe Prompt Formatting** - Structured prompts with escaping
+20. **Output Validation** - Sensitive data detection and redaction
+
+### Usage Examples
+
+```python
+# Password hashing
+from ktem.utils import hash_password, verify_password
+hashed = hash_password("user_password")
+is_valid = verify_password("user_password", hashed)
+
+# Rate limiting
+from ktem.utils import login_rate_limiter
+if login_rate_limiter.is_allowed(username):
+    # Process login
+    pass
+
+# Safe file extraction
+from ktem.utils import safe_extract_zip
+result = safe_extract_zip(archive_path, destination)
+if not result.success:
+    print(f"Error: {result.error_message}")
+
+# Health checks
+from ktem.utils import get_health_checker
+checker = get_health_checker("1.0.0")
+health = checker.check_health()
+
+# LLM safety
+from ktem.utils import detect_injection, sanitize_rag_content
+result = detect_injection(user_input)
+if result.risk_level == "critical":
+    # Reject input
+    pass
+safe_content = sanitize_rag_content(doc_content, "source.pdf")
+
+# Configuration
+from ktem.utils import get_config
+config = get_config()
+errors = config.validate()
+```
+
+### Migration Guide
+
+To integrate these utilities into the existing codebase:
+
+1. **Replace SHA256 password hashing:**
+   ```python
+   # Before
+   hashed = hashlib.sha256(pwd.encode()).hexdigest()
+   # After
+   from ktem.utils import hash_password
+   hashed = hash_password(pwd)
+   ```
+
+2. **Add rate limiting to login:**
+   ```python
+   from ktem.utils import login_rate_limiter
+   if not login_rate_limiter.is_allowed(username):
+       raise RateLimitExceeded("Too many attempts")
+   ```
+
+3. **Replace zipfile.extractall:**
+   ```python
+   # Before
+   zipfile.ZipFile(path).extractall(dest)
+   # After
+   from ktem.utils import safe_extract_zip
+   result = safe_extract_zip(path, dest)
+   ```
+
+4. **Add audit logging:**
+   ```python
+   from ktem.utils import audit_logger
+   audit_logger.log_login_success(user_id, username, ip)
+   ```
+
+---
+
 *This report was generated as part of an extensive code review on January 31, 2026. All findings include specific file paths and line numbers for easy reference.*
+
+*New utilities added: 8 modules, 5,600+ lines of production-grade code.*

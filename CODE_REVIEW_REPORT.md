@@ -1127,6 +1127,85 @@ To integrate these utilities into the existing codebase:
 
 ---
 
+## Appendix E: Deep Review of New Utilities - Issues Found
+
+A secondary deep code review of the newly added utility modules identified **47 additional issues** requiring attention before production deployment.
+
+### Summary by Module
+
+| Module | Critical | High | Medium | Low |
+|--------|----------|------|--------|-----|
+| security.py | 2 | 3 | 4 | 4 |
+| validation.py | 0 | 2 | 2 | 1 |
+| audit.py | 1 | 2 | 2 | 1 |
+| file_utils.py | 0 | 3 | 2 | 2 |
+| http_client.py | 0 | 3 | 3 | 1 |
+| health.py | 1 | 0 | 1 | 1 |
+| llm_safety.py | 2 | 3 | 2 | 2 |
+| config.py | 3 | 1 | 1 | 1 |
+| **Total** | **9** | **17** | **17** | **13** |
+
+### Critical Issues Requiring Immediate Fix
+
+| # | Module | Issue | Line(s) |
+|---|--------|-------|---------|
+| 1 | security.py | CSRF/Session secrets regenerated on restart, breaking tokens | 588, 686 |
+| 2 | security.py | Expired tokens can be refreshed without validation | 767-770 |
+| 3 | audit.py | Missing `return` statement in decorator breaks all decorated functions | 675 |
+| 4 | health.py | MetricsCollector has unbounded memory growth | 502-504 |
+| 5 | config.py | Thread-unsafe singleton pattern in ConfigManager | 273-312 |
+| 6 | config.py | Unhandled ValueError in int()/float() conversions | 41-45, 108-112 |
+| 7 | config.py | SecretsManager cache not thread-safe | 391-428 |
+| 8 | llm_safety.py | False positives flag legitimate content ("You are a teacher") | 77, 99-101 |
+| 9 | llm_safety.py | Sanitizer/detector case inconsistency allows bypasses | 191-193 |
+
+### High Priority Issues
+
+| # | Module | Issue | Line(s) |
+|---|--------|-------|---------|
+| 1 | security.py | Pepper concatenation without separator causes collisions | 82 |
+| 2 | security.py | Incomplete HTML entity decoding (only 5 entities) | 512-536 |
+| 3 | security.py | CSRF signature truncated to 64 bits | 614 |
+| 4 | validation.py | Large files loaded entirely into memory (up to 500MB) | 192, 199 |
+| 5 | validation.py | Broad exception catching swallows SystemExit | 351-352 |
+| 6 | audit.py | Background flush uses busy-waiting instead of wait() | 285 |
+| 7 | audit.py | Timestamp parsing can fail with invalid format | 551-559 |
+| 8 | file_utils.py | Private list access in TempFileManager could raise | 741 |
+| 9 | file_utils.py | No logging of secure deletion failure | 630-636 |
+| 10 | file_utils.py | Unused safe_filter validation function | 291-298 |
+| 11 | http_client.py | Module-level HTTPClient never closed | 572-577 |
+| 12 | http_client.py | Retries ALL exceptions including KeyboardInterrupt | 185 |
+| 13 | http_client.py | Zero-division possible in OutboundRateLimiter | 523 |
+| 14 | llm_safety.py | Uses findall() instead of search() - inefficient | 158-162 |
+| 15 | llm_safety.py | Missing Unicode handling (\w doesn't match non-ASCII) | Throughout |
+| 16 | llm_safety.py | Zero-width character bypasses not detected | Various |
+
+### Import Verification
+
+All new utility modules import successfully:
+
+```
+✓ security.py imports OK
+✓ validation.py imports OK
+✓ audit.py imports OK
+✓ file_utils.py imports OK
+✓ http_client.py imports OK
+✓ health.py imports OK
+✓ llm_safety.py imports OK
+✓ config.py imports OK
+```
+
+### Recommendations for Production Deployment
+
+1. **Fix critical issues before deployment** - Especially the missing return statement in audit.py:675
+2. **Require explicit secrets configuration** - Don't auto-generate secrets that break on restart
+3. **Add thread safety** - Use proper locking in ConfigManager and SecretsManager
+4. **Reduce false positives** - Review llm_safety.py patterns that flag legitimate content
+5. **Add input validation** - Validate rate limiter parameters to prevent division by zero
+6. **Improve memory management** - Add cleanup for MetricsCollector and limit growth
+
+---
+
 *This report was generated as part of an extensive code review on January 31, 2026. All findings include specific file paths and line numbers for easy reference.*
 
-*New utilities added: 8 modules, 5,600+ lines of production-grade code.*
+*New utilities added: 8 modules, 5,600+ lines of code. Secondary review found 47 issues (9 critical) requiring fixes.*
